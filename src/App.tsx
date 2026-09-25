@@ -85,6 +85,8 @@ export default function App() {
   });
   const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(true);
   const [isRefreshingThumbs, setIsRefreshingThumbs] = useState<boolean>(false);
 
   // D-Pad state for the TV simulator
@@ -230,49 +232,139 @@ export default function App() {
     });
   };
 
-  // Sync Google Sheets public CSV
+  // Sync Google Sheets CSV (Supports live auto-update and smart thumbnail preservation)
   const syncGoogleSheets = useCallback(
-    async (urlToFetch: string) => {
+    async (urlToFetch: string, isSilentPoll: boolean = false) => {
       if (!urlToFetch.trim()) return;
       try {
-        setIsSyncingSheets(true);
-        setSheetsSyncStatus('Sincronizando com o Google Sheets...');
-
-        const csvExportUrl = convertGoogleSheetsUrlToCsvUrl(urlToFetch);
-        const res = await fetch(csvExportUrl);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: Planilha não acessível publicamente`);
-        }
-        const csvText = await res.text();
-        const parsed = parseCsvToCatalog(csvText);
-
-        if (parsed.categories.length === 0) {
-          throw new Error('Nenhuma URL de vídeo encontrada na Coluna A da planilha.');
+        if (!isSilentPoll) {
+          setIsSyncingSheets(true);
+          setSheetsSyncStatus('Conectando ao Google Sheets...');
         }
 
-        // Merge or replace
-        setCatalog(parsed);
-        setActiveCategoryIndex(0);
-        setActiveItemIndex(0);
-        const total = parsed.categories.reduce((acc: number, c) => acc + c.items.length, 0);
-        setSheetsSyncStatus(`Sincronizado! ${total} vídeos carregados da planilha.`);
+        let csvText = '';
+
+        // 1. Try server proxy endpoint first (avoids browser CORS issues and handles redirects)
+        try {
+          const apiRes = await fetch(`/api/fetch-sheets-csv?url=${encodeURIComponent(urlToFetch)}`);
+          if (apiRes.ok) {
+            const data = await apiRes.json();
+            if (data.success && data.csvText) {
+              csvText = data.csvText;
+            }
+          }
+        } catch {}
+
+        // 2. Direct client fallback if server endpoint is unavailable
+        if (!csvText) {
+          const csvExportUrl = convertGoogleSheetsUrlToCsvUrl(urlToFetch);
+          try {
+            const res = await fetch(csvExportUrl);
+            if (res.ok) {
+              csvText = await res.text();
+            }
+          } catch {}
+
+          if (!csvText) {
+            const sheetMatch = urlToFetch.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            if (sheetMatch) {
+              const gvizRes = await fetch(`https://docs.google.com/spreadsheets/d/${sheetMatch[1]}/gviz/tq?tqx=out:csv`);
+              if (gvizRes.ok) {
+                csvText = await gvizRes.text();
+              }
+            }
+          }
+        }
+
+        if (!csvText) {
+          throw new Error('Não foi possível ler a planilha. Verifique se o Compartilhamento está público (Qualquer pessoa com o link).');
+        }
+
+        if (csvText.includes('ServiceLogin?service=wise') || csvText.includes('accounts.google.com')) {
+          throw new Error('A planilha está privada: no Google Sheets, mude o Acesso Geral para "Qualquer pessoa com o link".');
+        }
+
+        // Parse CSV preserving existing extracted thumbnails and stable item IDs
+        setCatalog((prevCatalog) => {
+          const parsed = parseCsvToCatalog(csvText, prevCatalog);
+
+          if (parsed.categories.length === 0) {
+            if (!isSilentPoll) {
+              setSheetsSyncStatus('Nenhum link de vídeo encontrado na Coluna A da planilha.');
+            }
+            return prevCatalog;
+          }
+
+          const total = parsed.categories.reduce((acc: number, c) => acc + c.items.length, 0);
+          const nowStr = new Date().toLocaleTimeString('pt-BR');
+          setLastSyncTime(nowStr);
+          setSheetsSyncStatus(`Sincronizado às ${nowStr} • ${total} vídeos ativos`);
+
+          // Background auto-resolve for any new videos with generic thumbnails
+          parsed.categories.forEach((cat) => {
+            cat.items.forEach((item) => {
+              const isGeneric =
+                !item.thumbnailUrl ||
+                item.thumbnailUrl.includes('images.unsplash.com') ||
+                item.thumbnailUrl.includes('placeholder');
+              if (isGeneric) {
+                forceFetchThumbnail(item.streamUrl, item.originalUrl).then((thumb) => {
+                  if (thumb) {
+                    handleUpdateThumbnail(item.id, thumb);
+                  }
+                });
+              }
+            });
+          });
+
+          return parsed;
+        });
+
         localStorage.setItem('tv_hub_sheets_url', urlToFetch);
       } catch (err: any) {
         console.error('Sheets sync error:', err);
-        setSheetsSyncStatus(
-          `Falha: ${err.message || 'Verifique se a planilha está pública (Qualquer pessoa com o link).'}`
-        );
+        if (!isSilentPoll) {
+          setSheetsSyncStatus(
+            `Falha: ${err.message || 'Verifique se a planilha está pública (Qualquer pessoa com o link).'}`
+          );
+        }
       } finally {
-        setIsSyncingSheets(false);
+        if (!isSilentPoll) {
+          setIsSyncingSheets(false);
+        }
       }
     },
-    []
+    [handleUpdateThumbnail]
   );
 
   const handleSaveSheetsUrl = (url: string) => {
     setSheetsUrl(url);
-    syncGoogleSheets(url);
+    syncGoogleSheets(url, false);
   };
+
+  const handleDisconnectSheets = () => {
+    setSheetsUrl('');
+    localStorage.removeItem('tv_hub_sheets_url');
+    setSheetsSyncStatus(null);
+    setLastSyncTime(null);
+    setCatalog(DEFAULT_CATALOG);
+    setActiveCategoryIndex(0);
+    setActiveItemIndex(0);
+  };
+
+  // Auto-sync polling: when connected to Google Sheets, poll every 20s for new rows added to the sheet
+  useEffect(() => {
+    if (!sheetsUrl || !autoSyncEnabled) return;
+
+    // Initial sync on mount if url is saved
+    syncGoogleSheets(sheetsUrl, true);
+
+    const timer = setInterval(() => {
+      syncGoogleSheets(sheetsUrl, true);
+    }, 20000);
+
+    return () => clearInterval(timer);
+  }, [sheetsUrl, autoSyncEnabled, syncGoogleSheets]);
 
   // Navigation handlers from the D-Pad remote widget
   const handleRemoteUp = () => {
@@ -425,9 +517,13 @@ export default function App() {
               onApplyCatalog={(newCat) => setCatalog(newCat)}
               currentSheetsUrl={sheetsUrl}
               onSaveSheetsUrl={handleSaveSheetsUrl}
-              onRefreshSheets={() => syncGoogleSheets(sheetsUrl)}
+              onRefreshSheets={() => syncGoogleSheets(sheetsUrl, false)}
+              onDisconnectSheets={handleDisconnectSheets}
               isSyncingSheets={isSyncingSheets}
               sheetsSyncStatus={sheetsSyncStatus}
+              lastSyncTime={lastSyncTime}
+              autoSyncEnabled={autoSyncEnabled}
+              onToggleAutoSync={() => setAutoSyncEnabled((prev) => !prev)}
               recentAddedCount={catalog.categories.reduce((acc, c) => acc + c.items.length, 0)}
             />
 

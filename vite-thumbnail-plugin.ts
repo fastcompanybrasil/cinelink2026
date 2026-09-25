@@ -73,6 +73,31 @@ export function thumbnailApiPlugin(): Plugin {
           return;
         }
 
+        // Route 3: Fetch Google Sheets CSV with auto-redirect and permissive CORS
+        if (parsedUrl.pathname === '/api/fetch-sheets-csv') {
+          const sheetUrl = parsedUrl.searchParams.get('url');
+          if (!sheetUrl) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Missing url parameter' }));
+            return;
+          }
+
+          try {
+            const csvResult = await fetchGoogleSheetsCsv(sheetUrl);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.end(JSON.stringify({ success: true, csvText: csvResult }));
+          } catch (err: any) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to fetch sheets CSV' }));
+          }
+          return;
+        }
+
         next();
       });
     }
@@ -222,4 +247,61 @@ async function resolveThumbnail(rawUrl: string): Promise<string | null> {
   } catch {}
 
   return null;
+}
+
+async function fetchGoogleSheetsCsv(rawUrl: string): Promise<string> {
+  const trimmed = rawUrl.trim();
+  const candidates: string[] = [];
+
+  const sheetMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (sheetMatch) {
+    const docId = sheetMatch[1];
+    const gidMatch = trimmed.match(/[#&]gid=([0-9]+)/);
+    const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : '';
+
+    candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv${gidParam}`);
+    candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/export?format=csv${gidParam}`);
+  }
+
+  // Published to web format: /spreadsheets/d/e/.../pub
+  if (trimmed.includes('/pubhtml') || trimmed.includes('/pub?')) {
+    candidates.unshift(trimmed.replace(/\/pubhtml.*$/, '/pub?output=csv'));
+  }
+
+  candidates.push(trimmed);
+
+  let lastError = '';
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(candidate, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        redirect: 'follow'
+      });
+
+      if (!res.ok) {
+        lastError = `HTTP ${res.status}`;
+        continue;
+      }
+
+      const text = await res.text();
+      // Verify it's not a Google login page
+      if (text.includes('accounts.google.com/ServiceLogin') || text.includes('ServiceLogin?service=wise')) {
+        throw new Error('Planilha privada: No Google Sheets, clique em Compartilhar e mude o Acesso Geral para "Qualquer pessoa com o link".');
+      }
+
+      // Check if it looks like CSV or at least has lines
+      if (text.trim().length > 0) {
+        return text;
+      }
+    } catch (e: any) {
+      lastError = e?.message || String(e);
+      if (lastError.includes('Planilha privada')) {
+        throw e;
+      }
+    }
+  }
+
+  throw new Error(`Não foi possível baixar o CSV da planilha (${lastError}). Verifique o link e se o compartilhamento está público.`);
 }

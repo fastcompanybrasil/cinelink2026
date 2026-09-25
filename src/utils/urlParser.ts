@@ -15,12 +15,13 @@ import { getCachedThumbnail } from './thumbnailExtractor';
 export function parseVideoUrl(
   inputUrl: string,
   customTitle?: string,
-  categoryName?: string
+  categoryName?: string,
+  customThumbUrl?: string
 ): { item: VideoItem; categoryTitle: string } {
   const trimmed = inputUrl.trim();
   const id = 'v_' + Math.random().toString(36).substring(2, 9);
   const now = new Date().toLocaleDateString('pt-BR');
-  const cachedThumb = getCachedThumbnail(trimmed);
+  const cachedThumb = customThumbUrl?.trim() || getCachedThumbnail(trimmed);
 
   // 1. Check XVideos (video.ID/... -> embedframe/ID)
   // Example: https://www.xvideos.com/video.omabaft9877/apaixonando-se... -> https://www.xvideos.com/embedframe/omabaft9877
@@ -210,11 +211,22 @@ export function convertGoogleSheetsUrlToCsvUrl(sheetUrl: string): string {
   return trimmed;
 }
 
-export function parseCsvToCatalog(csvText: string): CatalogResponse {
+export function parseCsvToCatalog(csvText: string, existingCatalog?: CatalogResponse): CatalogResponse {
   const lines = csvText
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+
+  // Build a lookup map of existing items to preserve resolved thumbnails
+  const existingMap = new Map<string, VideoItem>();
+  if (existingCatalog) {
+    for (const cat of existingCatalog.categories) {
+      for (const it of cat.items) {
+        if (it.streamUrl) existingMap.set(it.streamUrl, it);
+        if (it.originalUrl) existingMap.set(it.originalUrl, it);
+      }
+    }
+  }
 
   const categoriesMap: { [catTitle: string]: VideoItem[] } = {};
 
@@ -242,8 +254,18 @@ export function parseCsvToCatalog(csvText: string): CatalogResponse {
 
     const customTitle = cleanParts[1] || '';
     const customCategory = cleanParts[2] || 'Planilha Google Sheets';
+    const customThumb = cleanParts[3] || '';
 
-    const { item, categoryTitle } = parseVideoUrl(rawUrl, customTitle, customCategory);
+    const { item, categoryTitle } = parseVideoUrl(rawUrl, customTitle, customCategory, customThumb);
+
+    // If an existing item already had its thumbnail resolved and no explicit thumb was in CSV, keep existing
+    const existing = existingMap.get(item.streamUrl) || existingMap.get(item.originalUrl || '');
+    if (existing && !customThumb) {
+      if (existing.thumbnailUrl && !existing.thumbnailUrl.includes('placeholder')) {
+        item.thumbnailUrl = existing.thumbnailUrl;
+      }
+      item.id = existing.id; // Keep stable ID
+    }
 
     if (!categoriesMap[categoryTitle]) {
       categoriesMap[categoryTitle] = [];

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Banner obrigatório para Android TV: proporção 16:9 (320dp x 180dp) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Fundo em gradiente escuro cinematográfico -->
+    <path
+        android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="180"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF0D1117" />
+                <item android:offset="0.5" android:color="#FF161B22" />
+                <item android:offset="1.0" android:color="#FF040D21" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Brilho estético ciano/azul neon sutil -->
+    <path
+        android:pathData="M240,20a70,70 0 1,0 0.1,0"
+        android:fillAlpha="0.18">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:gradientRadius="70"
+                android:centerX="240"
+                android:centerY="20"
+                android:type="radial">
+                <item android:offset="0.0" android:color="#FF00E5FF" />
+                <item android:offset="1.0" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Moldura de TV decorativa central -->
+    <path
+        android:pathData="M110,50 h100 a10,10 0 0,1 10,10 v50 a10,10 0 0,1 -10,10 h-100 a10,10 0 0,1 -10,-10 v-50 a10,10 0 0,1 10,-10 z"
+        android:strokeColor="#FF00E5FF"
+        android:strokeWidth="3"
+        android:fillColor="#2200E5FF" />
+
+    <!-- Ícone Play estilizado dentro da TV -->
+    <path
+        android:pathData="M152,68 L176,85 L152,102 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Base / pedestal da TV -->
+    <path
+        android:pathData="M150,120 h20 v12 h-20 z M135,132 h50 v4 h-50 z"
+        android:fillColor="#FF00E5FF" />
+
+    <!-- Efeito de linha de base ciano de alta resolução -->
+    <path
+        android:pathData="M0,176 h320 v4 h-320 z"
+        android:fillColor="#FF00E5FF" />
+</vector>

@@ -1,0 +1,40 @@
+{
+  "categories": [
+    {
+      "id": "1",
+      "title": "Canais Ao Vivo",
+      "items": [
+        {
+          "id": "101",
+          "title": "Stream de Teste (Mux Live HLS)",
+          "thumbnailUrl": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500",
+          "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+        },
+        {
+          "id": "102",
+          "title": "Big Buck Bunny (HLS ABR)",
+          "thumbnailUrl": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500",
+          "streamUrl": "https://test-streams.mux.dev/test_001/stream.m3u8"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "title": "Filmes em Alta",
+      "items": [
+        {
+          "id": "201",
+          "title": "Sintel (Full HD)",
+          "thumbnailUrl": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500",
+          "streamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+        },
+        {
+          "id": "202",
+          "title": "Tears of Steel (Sci-Fi Master)",
+          "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500",
+          "streamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+        }
+      ]
+    }
+  ]
+}

@@ -22,8 +22,12 @@ interface MinimalFeedPanelProps {
   currentSheetsUrl: string;
   onSaveSheetsUrl: (url: string) => void;
   onRefreshSheets: () => void;
+  onDisconnectSheets: () => void;
   isSyncingSheets: boolean;
   sheetsSyncStatus: string | null;
+  lastSyncTime: string | null;
+  autoSyncEnabled: boolean;
+  onToggleAutoSync: () => void;
   recentAddedCount: number;
 }
 
@@ -33,8 +37,12 @@ export const MinimalFeedPanel: React.FC<MinimalFeedPanelProps> = ({
   currentSheetsUrl,
   onSaveSheetsUrl,
   onRefreshSheets,
+  onDisconnectSheets,
   isSyncingSheets,
   sheetsSyncStatus,
+  lastSyncTime,
+  autoSyncEnabled,
+  onToggleAutoSync,
   recentAddedCount
 }) => {
   const [activeMode, setActiveMode] = useState<'quick' | 'sheets'>('quick');
@@ -228,59 +236,131 @@ export const MinimalFeedPanel: React.FC<MinimalFeedPanelProps> = ({
       {/* Mode 2: Google Sheets Live Sync */}
       {activeMode === 'sheets' && (
         <div className="space-y-3">
-          <form onSubmit={handleSaveSheets} className="flex flex-col sm:flex-row gap-2">
-            <div className="flex-1 relative">
-              <input
-                type="url"
-                required
-                value={sheetInput}
-                onChange={(e) => setSheetInput(e.target.value)}
-                placeholder="Link da sua planilha Google Sheets pública (https://docs.google.com/spreadsheets/d/.../edit)..."
-                className="w-full px-3.5 py-2.5 bg-[#141924] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 font-mono transition"
-              />
+          {currentSheetsUrl ? (
+            /* Connected State View */
+            <div className="p-3.5 bg-[#121824] border border-emerald-500/40 rounded-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2.5 w-2.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400">
+                    Planilha Google Sheets Conectada
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                    {recentAddedCount} vídeos no streaming
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Auto-Sync Toggle */}
+                  <button
+                    type="button"
+                    onClick={onToggleAutoSync}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition border ${
+                      autoSyncEnabled
+                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                    title="Atualiza automaticamente novos vídeos inseridos na planilha a cada 20 segundos"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${autoSyncEnabled ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
+                    <span>Auto-Sync: {autoSyncEnabled ? 'Ligado (20s)' : 'Pausado'}</span>
+                  </button>
+
+                  {/* Manual Refresh Now */}
+                  <button
+                    type="button"
+                    onClick={onRefreshSheets}
+                    disabled={isSyncingSheets}
+                    className="flex items-center gap-1 px-3 py-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg text-xs transition active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                    <span>Sincronizar Agora</span>
+                  </button>
+
+                  {/* Disconnect Sheet */}
+                  <button
+                    type="button"
+                    onClick={onDisconnectSheets}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-red-950/50 hover:bg-red-900/80 text-red-300 hover:text-white border border-red-800/40 rounded-lg text-xs transition"
+                    title="Desconectar planilha e voltar ao catálogo padrão"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Desconectar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status details & sheet URL */}
+              <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2">
+                <div className="flex items-center gap-2 max-w-md truncate">
+                  <Table className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <a
+                    href={currentSheetsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cyan-400 hover:underline truncate font-mono text-[11px] flex items-center gap-1"
+                  >
+                    <span className="truncate">{currentSheetsUrl}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                </div>
+
+                {sheetsSyncStatus && (
+                  <span className="text-emerald-300 flex items-center gap-1 font-medium bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> {sheetsSyncStatus}
+                  </span>
+                )}
+              </div>
             </div>
-            <button
-              type="submit"
-              disabled={isSyncingSheets}
-              className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 active:scale-95 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition shrink-0 disabled:opacity-50"
-            >
-              {isSyncingSheets ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Table className="w-3.5 h-3.5" />
-              )}
-              <span>Conectar Planilha</span>
-            </button>
-            {currentSheetsUrl && (
+          ) : (
+            /* Input Form when not connected */
+            <form onSubmit={handleSaveSheets} className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 relative">
+                <input
+                  type="url"
+                  required
+                  value={sheetInput}
+                  onChange={(e) => setSheetInput(e.target.value)}
+                  placeholder="Link da sua planilha Google Sheets pública (https://docs.google.com/spreadsheets/d/.../edit)..."
+                  className="w-full px-3.5 py-2.5 bg-[#141924] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 font-mono transition"
+                />
+              </div>
               <button
-                type="button"
-                onClick={onRefreshSheets}
+                type="submit"
                 disabled={isSyncingSheets}
-                className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs transition"
-                title="Sincronizar novamente com o Google Sheets"
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 active:scale-95 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition shrink-0 disabled:opacity-50"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
-                <span>Atualizar</span>
+                {isSyncingSheets ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Table className="w-3.5 h-3.5" />
+                )}
+                <span>Conectar Planilha</span>
               </button>
-            )}
-          </form>
+            </form>
+          )}
 
           {/* Sheets Status & Instructions toggle */}
           <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2">
             <div className="flex items-center gap-2">
-              {sheetsSyncStatus ? (
-                <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {sheetsSyncStatus}
-                </span>
-              ) : (
-                <span>Insira uma planilha pública com colunas: <strong>Coluna A (URL)</strong>, <strong>Coluna B (Título)</strong>, <strong>Coluna C (Categoria)</strong></span>
+              {!currentSheetsUrl && (
+                sheetsSyncStatus ? (
+                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {sheetsSyncStatus}
+                  </span>
+                ) : (
+                  <span>Colunas suportadas: <strong>Col A (URL)</strong> &bull; <strong>Col B (Título)</strong> &bull; <strong>Col C (Categoria)</strong> &bull; <strong>Col D (Capa opcional)</strong></span>
+                )
               )}
             </div>
 
             <button
               type="button"
               onClick={() => setShowGuide(!showGuide)}
-              className="text-cyan-400 hover:underline flex items-center gap-1"
+              className="text-cyan-400 hover:underline flex items-center gap-1 ml-auto"
             >
               <HelpCircle className="w-3 h-3" />
               <span>{showGuide ? 'Ocultar instruções da Planilha' : 'Como configurar a Google Sheets?'}</span>
@@ -299,13 +379,22 @@ export const MinimalFeedPanel: React.FC<MinimalFeedPanelProps> = ({
                   Crie uma planilha no Google Sheets pelo celular ou computador.
                 </li>
                 <li>
-                  Organize as colunas: <strong>Coluna A = URL do Vídeo</strong>, <strong>Coluna B = Nome do Vídeo (opcional)</strong>, <strong>Coluna C = Categoria (ex: Canais, Filmes, Séries)</strong>.
+                  Organize as colunas:
+                  <ul className="list-disc list-inside pl-4 mt-1 space-y-0.5 text-slate-300">
+                    <li><strong>Coluna A</strong>: URL do Vídeo (ex: link do XVideos, YouTube, .m3u8, MP4, etc.)</li>
+                    <li><strong>Coluna B</strong>: Nome / Título do Vídeo (opcional)</li>
+                    <li><strong>Coluna C</strong>: Categoria do Carrossel na TV (ex: Cuckold, Blonde, Filmes, Séries)</li>
+                    <li><strong>Coluna D</strong>: Link de Capa / Thumbnail personalizada (opcional, o app extrai automaticamente se vazio)</li>
+                  </ul>
                 </li>
                 <li>
-                  Clique em <strong>Compartilhar</strong> &rarr; Mude para <strong>"Qualquer pessoa com o link pode ler"</strong>.
+                  Clique no botão <strong>Compartilhar</strong> no topo da planilha &rarr; Em <em>Acesso geral</em>, altere para <strong>"Qualquer pessoa com o link"</strong> como <strong>Leitor</strong>.
                 </li>
                 <li>
-                  Cole o link aqui. O app do Android TV baixa o CSV público automaticamente e recarrega os trilhos sem precisar compilar nada!
+                  Cole o link aqui e clique em <strong>Conectar Planilha</strong>.
+                </li>
+                <li>
+                  <strong>Atualização Automática (Auto-Sync)</strong>: A cada 20 segundos, o app verifica a planilha. Novos vídeos adicionados por você na planilha sobem imediatamente na TV Google sem precisar recarregar o navegador ou compilar código!
                 </li>
               </ol>
             </div>
