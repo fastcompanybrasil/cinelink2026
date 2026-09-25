@@ -1,0 +1,8 @@
+{
+  "name": "CINELINK - Android TV Compose Hub - Streaming by URL",
+  "description": "Hub de Streaming para Google TV / Android TV construído com Jetpack Compose for TV, AndroidX Media3 (ExoPlayer), Retrofit e Coil, com simulador 10-foot e código Kotlin integral.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
